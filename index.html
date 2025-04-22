@@ -4,13 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rural Connect</title>
+    <!-- React and Babel via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.15/babel.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js"></script>
+    <!-- Firebase Compatibility Scripts via CDN -->
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-storage-compat.js"></script>
+    <!-- TailwindCSS via CDN -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
         body { font-family: 'Arial', sans-serif; }
@@ -18,6 +21,8 @@
         .service-card { @apply bg-white p-3 m-2 rounded-lg shadow hover:shadow-lg transition; }
         .banner { @apply bg-blue-500 text-white p-4 rounded-lg mb-4; }
         .language-toggle { @apply fixed top-4 right-4 bg-gray-800 text-white px-3 py-1 rounded; }
+        .chatbot { @apply fixed bottom-4 right-4 bg-blue-500 text-white p-4 rounded-full shadow-lg; }
+        .error-message { @apply text-red-500 p-4 text-center; }
     </style>
 </head>
 <body>
@@ -25,7 +30,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // Firebase Configuration
+        // Firebase Configuration (Replace with your ruralconnect-ttyvz config)
         const firebaseConfig = {
             apiKey: "YOUR_API_KEY",
             authDomain: "YOUR_AUTH_DOMAIN",
@@ -35,10 +40,20 @@
             messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
             appId: "YOUR_APP_ID"
         };
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.database();
-        const storage = firebase.storage();
+
+        // Initialize Firebase (with fallback)
+        let auth, db, storage;
+        let firebaseInitialized = false;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth();
+            db = firebase.database();
+            storage = firebase.storage();
+            firebaseInitialized = true;
+            console.log("Firebase initialized successfully");
+        } catch (error) {
+            console.warn("Firebase initialization failed. Using static mode:", error.message);
+        }
 
         // Main App Component
         function App() {
@@ -46,19 +61,29 @@
             const [role, setRole] = useState('');
             const [language, setLanguage] = useState('en');
             const [searchQuery, setSearchQuery] = useState('');
+            const [error, setError] = useState('');
 
             useEffect(() => {
-                auth.onAuthStateChanged((user) => {
-                    if (user) {
-                        setUser(user);
-                        db.ref('users/' + user.uid).once('value').then((snapshot) => {
-                            setRole(snapshot.val()?.role || '');
-                        });
-                    } else {
-                        setUser(null);
-                        setRole('');
-                    }
-                });
+                if (firebaseInitialized && auth) {
+                    auth.onAuthStateChanged((user) => {
+                        if (user) {
+                            setUser(user);
+                            db.ref('users/' + user.uid).once('value').then((snapshot) => {
+                                setRole(snapshot.val()?.role || '');
+                            }).catch((err) => {
+                                setError('Failed to fetch user role: ' + err.message);
+                            });
+                        } else {
+                            setUser(null);
+                            setRole('');
+                        }
+                    });
+                } else {
+                    // Mock user for static preview
+                    setUser({ uid: 'mock-user', phoneNumber: '+1234567890' });
+                    setRole('customer');
+                    console.log("Running in static mode with mock user");
+                }
             }, []);
 
             const toggleLanguage = () => {
@@ -69,6 +94,10 @@
                 setSearchQuery(e.target.value);
             };
 
+            if (error) {
+                return <div className="error-message">{error}</div>;
+            }
+
             return (
                 <div className="min-h-screen bg-gray-50">
                     <button onClick={toggleLanguage} className="language-toggle">
@@ -77,6 +106,8 @@
                     {user ? (
                         role === 'provider' ? (
                             <ProviderDashboard language={language} />
+                        ) : role === 'admin' ? (
+                            <AdminPanel language={language} />
                         ) : (
                             <CustomerDashboard 
                                 language={language} 
@@ -97,20 +128,34 @@
             const [otp, setOtp] = useState('');
             const [role, setRole] = useState('customer');
             const [otpSent, setOtpSent] = useState(false);
+            const [error, setError] = useState('');
 
             const sendOtp = () => {
-                const recaptcha = new firebase.auth.RecaptchaVerifier('recaptcha', {
-                    size: 'invisible'
-                });
-                auth.signInWithPhoneNumber(phone, recaptcha)
-                    .then((confirmationResult) => {
-                        window.confirmationResult = confirmationResult;
-                        setOtpSent(true);
-                    })
-                    .catch((error) => alert('Error sending OTP: ' + error.message));
+                if (!firebaseInitialized || !auth) {
+                    setError('Firebase not initialized. Please configure Firebase or use static mode.');
+                    return;
+                }
+                try {
+                    const recaptcha = new firebase.auth.RecaptchaVerifier('recaptcha', {
+                        size: 'invisible'
+                    });
+                    auth.signInWithPhoneNumber(phone, recaptcha)
+                        .then((confirmationResult) => {
+                            window.confirmationResult = confirmationResult;
+                            setOtpSent(true);
+                            setError('');
+                        })
+                        .catch((error) => setError('Error sending OTP: ' + error.message));
+                } catch (err) {
+                    setError('Recaptcha initialization failed: ' + err.message);
+                }
             };
 
             const verifyOtp = () => {
+                if (!window.confirmationResult) {
+                    setError('No OTP sent. Please send OTP first.');
+                    return;
+                }
                 window.confirmationResult.confirm(otp)
                     .then((result) => {
                         const user = result.user;
@@ -119,9 +164,12 @@
                             phone,
                             address: '',
                             verified: false
+                        }).catch((err) => {
+                            setError('Failed to save user data: ' + err.message);
                         });
+                        setError('');
                     })
-                    .catch((error) => alert('OTP verification failed: ' + error.message));
+                    .catch((error) => setError('OTP verification failed: ' + error.message));
             };
 
             return (
@@ -130,6 +178,7 @@
                         <h2 className="text-2xl font-bold mb-4">
                             {language === 'en' ? 'Login / Signup' : 'लॉगिन / साइनअप'}
                         </h2>
+                        {error && <p className="text-red-500 mb-4">{error}</p>}
                         <input
                             type="text"
                             placeholder={language === 'en' ? 'Phone Number' : 'फोन नंबर'}
@@ -240,7 +289,7 @@
                                         <div key={service} className="service-card">
                                             <p>{service}</p>
                                             <button
-                                                onClick={() => alert(`Booking ${service}`)}
+                                                onClick={() => alert(`Booking ${service}. Redirecting to payment...`)}
                                                 className="bg-green-500 text-white px-2 py-1 rounded mt-2"
                                             >
                                                 {language === 'en' ? 'Book Now' : 'अभी बुक करें'}
@@ -260,6 +309,10 @@
             const [documents, setDocuments] = useState({ aadhaar: null, license: null });
 
             const handleDocumentUpload = (e, type) => {
+                if (!firebaseInitialized || !storage) {
+                    alert('Firebase Storage not initialized. Configure Firebase to upload documents.');
+                    return;
+                }
                 const file = e.target.files[0];
                 const uploadTask = storage.ref(`documents/${auth.currentUser.uid}/${type}`).put(file);
                 uploadTask.on(
@@ -301,54 +354,82 @@
             );
         }
 
-        // Chatbot Component (Placeholder for Dialogflow Integration)
+        // Admin Panel (Placeholder)
+        function AdminPanel({ language }) {
+            return (
+                <div className="p-4">
+                    <h2 className="text-2xl font-bold mb-4">
+                        {language === 'en' ? 'Admin Panel' : 'प्रशासन पैनल'}
+                    </h2>
+                    <div className="bg-white p-4 rounded-lg shadow mb-4">
+                        <h3 className="text-lg font-semibold mb-2">
+                            {language === 'en' ? 'Manage Providers' : 'प्रदाताओं को प्रबंधित करें'}
+                        </h3>
+                        <button className="bg-green-500 text-white p-2 rounded mr-2">
+                            {language === 'en' ? 'Approve Providers' : 'प्रदाताओं को स्वीकृत करें'}
+                        </button>
+                        <button className="bg-red-500 text-white p-2 rounded">
+                            {language === 'en' ? 'Reject Providers' : 'प्रदाताओं को अस्वीकार करें'}
+                        </button>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg shadow mb-4">
+                        <h3 className="text-lg font-semibold mb-2">
+                            {language === 'en' ? 'Monitor Transactions' : 'लेनदेन की निगरानी करें'}
+                        </h3>
+                        <p>{language === 'en' ? 'View transaction logs' : 'लेनदेन लॉग देखें'}</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg shadow">
+                        <h3 className="text-lg font-semibold mb-2">
+                            {language === 'en' ? 'Broadcast Notifications' : 'प्रसारण सूचनाएँ'}
+                        </h3>
+                        <textarea
+                            placeholder={language === 'en' ? 'Enter notification message...' : 'सूचना संदेश दर्ज करें...'}
+                            className="w-full p-2 border rounded mb-2"
+                        />
+                        <button className="bg-blue-500 text-white p-2 rounded">
+                            {language === 'en' ? 'Send Notification' : 'सूचना भेजें'}
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // Chatbot Component (Placeholder)
         function Chatbot({ language }) {
             return (
-                <div className="fixed bottom-4 right-4 bg-blue-500 text-white p-4 rounded-full shadow-lg">
+                <div className="chatbot">
                     <p>{language === 'en' ? 'Chat with us!' : 'हमसे चैट करें!'}</p>
                 </div>
             );
         }
 
-        // Render the App
-        ReactDOM.render(<App />, document.getElementById('root'));
+        // Render the App with Error Boundary
+        class ErrorBoundary extends React.Component {
+            state = { error: null };
+            static getDerivedStateFromError(error) {
+                return { error: error.message };
+            }
+            render() {
+                if (this.state.error) {
+                    return <div className="error-message">Error: {this.state.error}</div>;
+                }
+                return this.props.children;
+            }
+        }
+
+        ReactDOM.render(
+            <ErrorBoundary>
+                <App />
+            </ErrorBoundary>,
+            document.getElementById('root')
+        );
 
         // PWA Service Worker
-        if ('serviceWorker' in navigator) {
+        if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
             navigator.serviceWorker.register('/sw.js')
                 .then(() => console.log('Service Worker Registered'))
                 .catch((error) => console.log('Service Worker Registration Failed:', error));
         }
-    </script>
-    <script>
-        // Service Worker for PWA
-        const swContent = `
-        self.addEventListener('install', (event) => {
-            event.waitUntil(
-                caches.open('rural-connect-cache').then((cache) => {
-                    return cache.addAll([
-                        '/',
-                        '/index.html',
-                        'https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css',
-                        'https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js',
-                        'https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js',
-                        'https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.15/babel.min.js'
-                    ]);
-                })
-            );
-        });
-
-        self.addEventListener('fetch', (event) => {
-            event.respondWith(
-                caches.match(event.request).then((response) => {
-                    return response || fetch(event.request);
-                })
-            );
-        });
-        `;
-        const swBlob = new Blob([swContent], { type: 'application/javascript' });
-        const swUrl = URL.createObjectURL(swBlob);
-        navigator.serviceWorker.register(swUrl);
     </script>
 </body>
 </html>
