@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rural Connect</title>
+    <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.15/babel.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-storage.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Arial', sans-serif; }
+        .category-container { @apply bg-gray-100 p-4 rounded-lg shadow-md; }
+        .service-card { @apply bg-white p-3 m-2 rounded-lg shadow hover:shadow-lg transition; }
+        .banner { @apply bg-blue-500 text-white p-4 rounded-lg mb-4; }
+        .language-toggle { @apply fixed top-4 right-4 bg-gray-800 text-white px-3 py-1 rounded; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            databaseURL: "YOUR_DATABASE_URL",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+        const storage = firebase.storage();
+
+        // Main App Component
+        function App() {
+            const [user, setUser] = useState(null);
+            const [role, setRole] = useState('');
+            const [language, setLanguage] = useState('en');
+            const [searchQuery, setSearchQuery] = useState('');
+
+            useEffect(() => {
+                auth.onAuthStateChanged((user) => {
+                    if (user) {
+                        setUser(user);
+                        db.ref('users/' + user.uid).once('value').then((snapshot) => {
+                            setRole(snapshot.val()?.role || '');
+                        });
+                    } else {
+                        setUser(null);
+                        setRole('');
+                    }
+                });
+            }, []);
+
+            const toggleLanguage = () => {
+                setLanguage(language === 'en' ? 'hi' : 'en');
+            };
+
+            const handleSearch = (e) => {
+                setSearchQuery(e.target.value);
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    <button onClick={toggleLanguage} className="language-toggle">
+                        {language === 'en' ? 'हिन्दी' : 'English'}
+                    </button>
+                    {user ? (
+                        role === 'provider' ? (
+                            <ProviderDashboard language={language} />
+                        ) : (
+                            <CustomerDashboard 
+                                language={language} 
+                                searchQuery={searchQuery} 
+                                handleSearch={handleSearch} 
+                            />
+                        )
+                    ) : (
+                        <AuthScreen language={language} />
+                    )}
+                </div>
+            );
+        }
+
+        // Authentication Screen
+        function AuthScreen({ language }) {
+            const [phone, setPhone] = useState('');
+            const [otp, setOtp] = useState('');
+            const [role, setRole] = useState('customer');
+            const [otpSent, setOtpSent] = useState(false);
+
+            const sendOtp = () => {
+                const recaptcha = new firebase.auth.RecaptchaVerifier('recaptcha', {
+                    size: 'invisible'
+                });
+                auth.signInWithPhoneNumber(phone, recaptcha)
+                    .then((confirmationResult) => {
+                        window.confirmationResult = confirmationResult;
+                        setOtpSent(true);
+                    })
+                    .catch((error) => alert('Error sending OTP: ' + error.message));
+            };
+
+            const verifyOtp = () => {
+                window.confirmationResult.confirm(otp)
+                    .then((result) => {
+                        const user = result.user;
+                        db.ref('users/' + user.uid).set({
+                            role,
+                            phone,
+                            address: '',
+                            verified: false
+                        });
+                    })
+                    .catch((error) => alert('OTP verification failed: ' + error.message));
+            };
+
+            return (
+                <div className="flex items-center justify-center h-screen">
+                    <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+                        <h2 className="text-2xl font-bold mb-4">
+                            {language === 'en' ? 'Login / Signup' : 'लॉगिन / साइनअप'}
+                        </h2>
+                        <input
+                            type="text"
+                            placeholder={language === 'en' ? 'Phone Number' : 'फोन नंबर'}
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            className="w-full p-2 mb-4 border rounded"
+                        />
+                        <select
+                            value={role}
+                            onChange={(e) => setRole(e.target.value)}
+                            className="w-full p-2 mb-4 border rounded"
+                        >
+                            <option value="customer">{language === 'en' ? 'Customer' : 'ग्राहक'}</option>
+                            <option value="provider">{language === 'en' ? 'Service Provider' : 'सेवा प्रदाता'}</option>
+                        </select>
+                        {otpSent ? (
+                            <>
+                                <input
+                                    type="text"
+                                    placeholder={language === 'en' ? 'Enter OTP' : 'OTP दर्ज करें'}
+                                    value={otp}
+                                    onChange={(e) => setOtp(e.target.value)}
+                                    className="w-full p-2 mb-4 border rounded"
+                                />
+                                <button
+                                    onClick={verifyOtp}
+                                    className="w-full bg-blue-500 text-white p-2 rounded"
+                                >
+                                    {language === 'en' ? 'Verify OTP' : 'OTP सत्यापित करें'}
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <div id="recaptcha"></div>
+                                <button
+                                    onClick={sendOtp}
+                                    className="w-full bg-blue-500 text-white p-2 rounded"
+                                >
+                                    {language === 'en' ? 'Send OTP' : 'OTP भेजें'}
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Customer Dashboard
+        function CustomerDashboard({ language, searchQuery, handleSearch }) {
+            const categories = [
+                {
+                    name: language === 'en' ? 'Home Appliance Repair' : 'घरेलू उपकरण मरम्मत',
+                    icon: '🔧',
+                    services: [
+                        'Fridge Repair', 'AC Repair', 'Washing Machine Repair', 'Cooler Repair',
+                        'Ceiling Fan', 'Standing Fan', 'Submersible Pump'
+                    ]
+                },
+                {
+                    name: language === 'en' ? 'Electronics & Entertainment' : 'इलेक्ट्रॉनिक्स और मनोरंजन',
+                    icon: '📺',
+                    services: ['TV Repair', 'Radio Repair', 'LED Repair', 'Music System Repair']
+                },
+                {
+                    name: language === 'en' ? 'Construction & Maintenance' : 'निर्माण और रखरखाव',
+                    icon: '🏠',
+                    services: [
+                        'Plumber', 'Borewell Expert', 'POP/Wall Painter', 'Mason',
+                        'Labor Provider', 'Transport Services'
+                    ]
+                },
+                {
+                    name: language === 'en' ? 'Rural Specialty Services' : 'ग्रामीण विशेष सेवाएँ',
+                    icon: '🚜',
+                    services: [
+                        'Agricultural Equipment Repair', 'Tractor/Trolley Mechanic', 'Livestock Care Services'
+                    ]
+                },
+                {
+                    name: language === 'en' ? 'Emergency Services' : 'आपातकालीन सेवाएँ',
+                    icon: '⚡',
+                    services: ['Electrician', 'Well Repair', 'Urgent Plumber']
+                }
+            ];
+
+            return (
+                <div className="p-4">
+                    <div className="banner">
+                        {language === 'en' ? 'Special Offer: 10% OFF on First Booking!' : 'विशेष ऑफर: पहली बुकिंग पर 10% छूट!'}
+                    </div>
+                    <input
+                        type="text"
+                        placeholder={language === 'en' ? 'Search services or voice search...' : 'सेवाएँ खोजें या वॉयस सर्च...'}
+                        value={searchQuery}
+                        onChange={handleSearch}
+                        className="w-full p-2 mb-4 border rounded"
+                    />
+                    <button className="bg-blue-500 text-white p-2 rounded mb-4">
+                        {language === 'en' ? 'Voice Search' : 'वॉयस सर्च'}
+                    </button>
+                    {categories.map((category) => (
+                        <div key={category.name} className="category-container mb-4">
+                            <h3 className="text-xl font-bold mb-2">{category.icon} {category.name}</h3>
+                            <div className="flex flex-wrap">
+                                {category.services
+                                    .filter((service) => service.toLowerCase().includes(searchQuery.toLowerCase()))
+                                    .map((service) => (
+                                        <div key={service} className="service-card">
+                                            <p>{service}</p>
+                                            <button
+                                                onClick={() => alert(`Booking ${service}`)}
+                                                className="bg-green-500 text-white px-2 py-1 rounded mt-2"
+                                            >
+                                                {language === 'en' ? 'Book Now' : 'अभी बुक करें'}
+                                            </button>
+                                        </div>
+                                    ))}
+                            </div>
+                        </div>
+                    ))}
+                    <Chatbot language={language} />
+                </div>
+            );
+        }
+
+        // Provider Dashboard
+        function ProviderDashboard({ language }) {
+            const [documents, setDocuments] = useState({ aadhaar: null, license: null });
+
+            const handleDocumentUpload = (e, type) => {
+                const file = e.target.files[0];
+                const uploadTask = storage.ref(`documents/${auth.currentUser.uid}/${type}`).put(file);
+                uploadTask.on(
+                    'state_changed',
+                    null,
+                    (error) => alert('Upload failed: ' + error.message),
+                    () => {
+                        setDocuments({ ...documents, [type]: file.name });
+                    }
+                );
+            };
+
+            return (
+                <div className="p-4">
+                    <h2 className="text-2xl font-bold mb-4">
+                        {language === 'en' ? 'Provider Dashboard' : 'सेवा प्रदाता डैशबोर्ड'}
+                    </h2>
+                    <div className="bg-white p-4 rounded-lg shadow mb-4">
+                        <h3 className="text-lg font-semibold mb-2">
+                            {language === 'en' ? 'Upload Documents' : 'दस्तावेज़ अपलोड करें'}
+                        </h3>
+                        <input
+                            type="file"
+                            onChange={(e) => handleDocumentUpload(e, 'aadhaar')}
+                            className="mb-2"
+                        />
+                        <p>{documents.aadhaar ? `Aadhaar: ${documents.aadhaar}` : 'No Aadhaar uploaded'}</p>
+                        <input
+                            type="file"
+                            onChange={(e) => handleDocumentUpload(e, 'license')}
+                            className="mb-2"
+                        />
+                        <p>{documents.license ? `License: ${documents.license}` : 'No License uploaded'}</p>
+                    </div>
+                    <button className="bg-blue-500 text-white p-2 rounded">
+                        {language === 'en' ? 'View Bookings' : 'बुकिंग्स देखें'}
+                    </button>
+                </div>
+            );
+        }
+
+        // Chatbot Component (Placeholder for Dialogflow Integration)
+        function Chatbot({ language }) {
+            return (
+                <div className="fixed bottom-4 right-4 bg-blue-500 text-white p-4 rounded-full shadow-lg">
+                    <p>{language === 'en' ? 'Chat with us!' : 'हमसे चैट करें!'}</p>
+                </div>
+            );
+        }
+
+        // Render the App
+        ReactDOM.render(<App />, document.getElementById('root'));
+
+        // PWA Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(() => console.log('Service Worker Registered'))
+                .catch((error) => console.log('Service Worker Registration Failed:', error));
+        }
+    </script>
+    <script>
+        // Service Worker for PWA
+        const swContent = `
+        self.addEventListener('install', (event) => {
+            event.waitUntil(
+                caches.open('rural-connect-cache').then((cache) => {
+                    return cache.addAll([
+                        '/',
+                        '/index.html',
+                        'https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css',
+                        'https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js',
+                        'https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js',
+                        'https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.15/babel.min.js'
+                    ]);
+                })
+            );
+        });
+
+        self.addEventListener('fetch', (event) => {
+            event.respondWith(
+                caches.match(event.request).then((response) => {
+                    return response || fetch(event.request);
+                })
+            );
+        });
+        `;
+        const swBlob = new Blob([swContent], { type: 'application/javascript' });
+        const swUrl = URL.createObjectURL(swBlob);
+        navigator.serviceWorker.register(swUrl);
+    </script>
+</body>
+</html>
