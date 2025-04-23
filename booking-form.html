@@ -66,12 +66,15 @@
                 return;
             }
 
+            // Generate unique ID
+            const id = Date.now().toString();
+
             // Simulate push message to provider
             alert(`Booking request for ${service} sent to provider! Details: Name: ${name}, Phone: ${phone}, Address: ${address}, Time: ${preferredTime}. From: Rural Connect`);
 
             // Save booking to local storage
             const bookings = JSON.parse(localStorage.getItem('bookings') || '[]');
-            bookings.push({ service, name, phone, address, preferredTime, status: 'pending' });
+            bookings.push({ id, service, name, phone, address, preferredTime, status: 'pending' });
             localStorage.setItem('bookings', JSON.stringify(bookings));
 
             // Redirect to payment (placeholder)
