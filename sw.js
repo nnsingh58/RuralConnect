@@ -4,6 +4,7 @@ self.addEventListener('install', (event) => {
             return cache.addAll([
                 '/',
                 '/index.html',
+                '/booking-form.html',
                 'https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css',
                 'https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js',
                 'https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js',
