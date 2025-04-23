@@ -1,0 +1,29 @@
+<!-- Update the form container -->
+<div className="form-container">
+  <div className="header">
+    <h2 className="text-2xl font-bold">Booking Form</h2>
+    <a href="index.html" className="text-white hover:underline">← Back to Home</a>
+  </div>
+  <!-- ... rest of the form ... -->
+</div>
+
+<!-- Update the submitBooking function -->
+<script>
+  function submitBooking() {
+    // ... existing code ...
+    
+    // Send push notification
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(registration => {
+        registration.showNotification('New Booking', {
+          body: `New booking for ${service} from ${name}`,
+          icon: '/icon.png',
+          vibrate: [200, 100, 200]
+        });
+      });
+    }
+    
+    // Redirect with success message
+    window.location.href = 'index.html?bookingSuccess=true';
+  }
+</script>

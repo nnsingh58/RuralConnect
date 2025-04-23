@@ -1,0 +1,39 @@
+<!-- Add this inside the <head> section -->
+<link rel="manifest" href="/manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+<!-- Update the style section -->
+<style>
+  /* ... existing styles ... */
+  .dashboard-container {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-6 mb-6;
+  }
+  .dashboard-card {
+    @apply p-6 rounded-xl shadow-lg border border-gray-200 hover:shadow-xl transition;
+  }
+  .admin-card { @apply border-purple-500 bg-purple-50; }
+  .provider-card { @apply border-green-500 bg-green-50; }
+  .seeker-card { @apply border-blue-500 bg-blue-50; }
+  .notification-bell {
+    @apply relative bg-gray-200 p-2 rounded-full hover:bg-gray-300;
+  }
+  .notification-count {
+    @apply absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs;
+  }
+</style>
+
+<!-- Add this to the LoginScreen component -->
+<div className="notification-bell">
+  <span className="notification-count">3</span>
+  🔔
+</div>
+
+<!-- Update the Router section to include proper linking -->
+<Route path="/booking" component={() => (
+  <BookingForm 
+    user={user}
+    setUser={setUser}
+    language={language}
+    addNotification={addNotification}
+  />
+)} />
