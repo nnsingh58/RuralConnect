@@ -11,15 +11,19 @@
     <!-- TailwindCSS via CDN -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
-        body { font-family: 'Arial', sans-serif; }
-        .header { @apply sticky top-0 bg-white shadow-md z-10 p-4 flex justify-between items-center; }
-        .category-container { @apply bg-gray-100 p-4 rounded-lg shadow-md mb-4; }
-        .service-card { @apply bg-white p-3 m-2 rounded-lg shadow hover:shadow-lg transition; }
-        .banner { @apply bg-gradient-to-r from-blue-500 to-green-500 text-white p-4 rounded-lg mb-4; }
-        .language-toggle { @apply bg-gray-800 text-white px-3 py-1 rounded; }
-        .chatbot { @apply fixed bottom-4 right-4 bg-blue-500 text-white p-4 rounded-full shadow-lg; }
-        .error-message { @apply text-red-500 p-4 text-center; }
-        .main-content { @apply p-4; }
+        body { font-family: 'Arial', sans-serif; background: linear-gradient(to bottom, #e0f2fe, #ffffff); }
+        .header { @apply sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg z-10 p-4 flex justify-between items-center; }
+        .category-container { @apply bg-white p-6 rounded-xl shadow-lg mb-6 border border-gray-200; }
+        .service-card { @apply bg-gray-50 p-4 m-2 rounded-lg shadow-md hover:shadow-xl transition transform hover:-translate-y-1; }
+        .banner { @apply bg-gradient-to-r from-green-400 to-blue-500 text-white p-6 rounded-xl mb-6 font-semibold; }
+        .language-toggle { @apply bg-indigo-700 text-white px-4 py-2 rounded-lg hover:bg-indigo-800; }
+        .chatbot { @apply fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-xl hover:bg-blue-700; }
+        .error-message { @apply text-red-600 p-4 text-center font-medium; }
+        .main-content { @apply p-6; }
+        .services-overview { @apply bg-gray-100 p-6 rounded-xl mb-6; }
+        .footer { @apply bg-gray-800 text-white p-6 mt-6; }
+        .form-input { @apply w-full p-3 mb-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500; }
+        .form-button { @apply bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 w-full; }
     </style>
 </head>
 <body>
@@ -32,6 +36,23 @@
             'mock-customer': { uid: 'mock-customer', phoneNumber: '+919876543210', role: 'customer' },
             'mock-provider': { uid: 'mock-provider', phoneNumber: '+919876543211', role: 'provider' },
             'mock-admin': { uid: 'mock-admin', phoneNumber: '+919876543212', role: 'admin' }
+        };
+
+        // Mock Backend (Local Storage)
+        const saveProvider = (provider) => {
+            const providers = JSON.parse(localStorage.getItem('providers') || '[]');
+            providers.push({ ...provider, status: 'pending' });
+            localStorage.setItem('providers', JSON.stringify(providers));
+        };
+
+        const getProviders = () => {
+            return JSON.parse(localStorage.getItem('providers') || '[]');
+        };
+
+        const updateProviderStatus = (phone, status) => {
+            const providers = getProviders();
+            const updated = providers.map(p => p.phone === phone ? { ...p, status } : p);
+            localStorage.setItem('providers', JSON.stringify(updated));
         };
 
         // Main App Component
@@ -69,12 +90,12 @@
             }
 
             return (
-                <div className="min-h-screen bg-gray-50">
+                <div className="min-h-screen">
                     <div className="header">
                         <select
                             value={role}
                             onChange={(e) => handleRoleChange(e.target.value)}
-                            className="p-2 border rounded"
+                            className="p-2 border rounded bg-white text-gray-800"
                         >
                             <option value="customer">{language === 'en' ? 'Customer' : 'ग्राहक'}</option>
                             <option value="provider">{language === 'en' ? 'Service Provider' : 'सेवा प्रदाता'}</option>
@@ -85,6 +106,7 @@
                         </button>
                     </div>
                     <div className="main-content">
+                        <ServicesOverview language={language} />
                         {user ? (
                             role === 'provider' ? (
                                 <ProviderDashboard language={language} />
@@ -102,7 +124,24 @@
                                 {language === 'en' ? 'Loading user...' : 'उपयोगकर्ता लोड हो रहा है...'}
                             </div>
                         )}
+                        <Footer language={language} />
                     </div>
+                </div>
+            );
+        }
+
+        // Services Overview
+        function ServicesOverview({ language }) {
+            return (
+                <div className="services-overview">
+                    <h2 className="text-2xl font-bold mb-4">
+                        {language === 'en' ? 'Our Services' : 'हमारी सेवाएँ'}
+                    </h2>
+                    <p className="text-gray-700">
+                        {language === 'en' 
+                            ? 'Rural Connect offers a wide range of services including home appliance repair, construction, rural specialty services, and more. Book now to connect with trusted providers!' 
+                            : 'रूरल कनेक्ट विभिन्न सेवाएँ प्रदान करता है, जिसमें घरेलू उपकरण मरम्मत, निर्माण, ग्रामीण विशेष सेवाएँ और बहुत कुछ शामिल हैं। विश्वसनीय प्रदाताओं से जुड़ने के लिए अभी बुक करें!'}
+                    </p>
                 </div>
             );
         }
@@ -145,6 +184,11 @@
                 }
             ];
 
+            const handleBookNow = (service) => {
+                // Redirect to booking form
+                window.location.href = `booking-form.html?service=${encodeURIComponent(service)}`;
+            };
+
             return (
                 <div>
                     <div className="banner">
@@ -155,9 +199,9 @@
                         placeholder={language === 'en' ? 'Search services or voice search...' : 'सेवाएँ खोजें या वॉयस सर्च...'}
                         value={searchQuery}
                         onChange={handleSearch}
-                        className="w-full p-2 mb-4 border rounded"
+                        className="form-input"
                     />
-                    <button className="bg-blue-500 text-white p-2 rounded mb-4">
+                    <button className="form-button mb-4">
                         {language === 'en' ? 'Voice Search' : 'वॉयस सर्च'}
                     </button>
                     {categories.map((category) => (
@@ -168,10 +212,10 @@
                                     .filter((service) => service.toLowerCase().includes(searchQuery.toLowerCase()))
                                     .map((service) => (
                                         <div key={service} className="service-card">
-                                            <p>{service}</p>
+                                            <p className="font-medium">{service}</p>
                                             <button
-                                                onClick={() => alert(`Booking ${service}. Redirecting to payment...`)}
-                                                className="bg-green-500 text-white px-2 py-1 rounded mt-2"
+                                                onClick={() => handleBookNow(service)}
+                                                className="bg-green-500 text-white px-3 py-1 rounded-lg mt-2 hover:bg-green-600"
                                             >
                                                 {language === 'en' ? 'Book Now' : 'अभी बुक करें'}
                                             </button>
@@ -187,80 +231,157 @@
 
         // Provider Dashboard
         function ProviderDashboard({ language }) {
-            const [documents, setDocuments] = useState({ aadhaar: null, license: null });
+            const [formData, setFormData] = useState({
+                name: '',
+                phone: '',
+                address: '',
+                skills: []
+            });
+            const [submitted, setSubmitted] = useState(false);
 
-            const handleDocumentUpload = (e, type) => {
-                const file = e.target.files[0];
-                if (file) {
-                    setDocuments({ ...documents, [type]: file.name });
-                    alert(`${type} selected: ${file.name} (Mock upload, no storage)`);
-                }
+            const skillsList = [
+                'Fridge Repair', 'AC Repair', 'Plumber', 'Electrician', 'Mason',
+                'Tractor Mechanic', 'Borewell Expert', 'Painter', 'Livestock Care'
+            ];
+
+            const handleInputChange = (e) => {
+                const { name, value } = e.target;
+                setFormData({ ...formData, [name]: value });
             };
+
+            const handleSkillChange = (skill) => {
+                const skills = formData.skills.includes(skill)
+                    ? formData.skills.filter(s => s !== skill)
+                    : [...formData.skills, skill];
+                setFormData({ ...formData, skills });
+            };
+
+            const handleSubmit = () => {
+                if (!formData.name || !formData.phone || !formData.address || formData.skills.length === 0) {
+                    alert(language === 'en' ? 'Please fill all fields and select at least one skill.' : 'कृपया सभी क्षेत्र भरें और कम से कम एक कौशल चुनें।');
+                    return;
+                }
+                saveProvider(formData);
+                setSubmitted(true);
+                alert(language === 'en' ? 'Registration submitted! Awaiting admin approval.' : 'पंजीकरण सबमिट किया गया! व्यवस्थापक अनुमोदन की प्रतीक्षा है।');
+            };
+
+            if (submitted) {
+                return (
+                    <div>
+                        <h2 className="text-2xl font-bold mb-4">
+                            {language === 'en' ? 'Provider Dashboard' : 'सेवा प्रदाता डैशबोर्ड'}
+                        </h2>
+                        <p className="text-green-600">
+                            {language === 'en' ? 'Your registration is pending approval.' : 'आपका पंजीकरण अनुमोदन के लिए लंबित है।'}
+                        </p>
+                    </div>
+                );
+            }
 
             return (
                 <div>
                     <h2 className="text-2xl font-bold mb-4">
-                        {language === 'en' ? 'Provider Dashboard' : 'सेवा प्रदाता डैशबोर्ड'}
+                        {language === 'en' ? 'Provider Registration' : 'सेवा प्रदाता पंजीकरण'}
                     </h2>
-                    <div className="bg-white p-4 rounded-lg shadow mb-4">
+                    <div className="bg-white p-6 rounded-xl shadow-lg">
+                        <input
+                            type="text"
+                            name="name"
+                            placeholder={language === 'en' ? 'Full Name' : 'पूरा नाम'}
+                            value={formData.name}
+                            onChange={handleInputChange}
+                            className="form-input"
+                        />
+                        <input
+                            type="text"
+                            name="phone"
+                            placeholder={language === 'en' ? 'Phone Number' : 'फोन नंबर'}
+                            value={formData.phone}
+                            onChange={handleInputChange}
+                            className="form-input"
+                        />
+                        <input
+                            type="text"
+                            name="address"
+                            placeholder={language === 'en' ? 'Address' : 'पता'}
+                            value={formData.address}
+                            onChange={handleInputChange}
+                            className="form-input"
+                        />
                         <h3 className="text-lg font-semibold mb-2">
-                            {language === 'en' ? 'Upload Documents (Mock)' : 'दस्तावेज़ अपलोड करें (मॉक)'}
+                            {language === 'en' ? 'Select Skills' : 'कौशल चुनें'}
                         </h3>
-                        <input
-                            type="file"
-                            onChange={(e) => handleDocumentUpload(e, 'aadhaar')}
-                            className="mb-2"
-                        />
-                        <p>{documents.aadhaar ? `Aadhaar: ${documents.aadhaar}` : 'No Aadhaar selected'}</p>
-                        <input
-                            type="file"
-                            onChange={(e) => handleDocumentUpload(e, 'license')}
-                            className="mb-2"
-                        />
-                        <p>{documents.license ? `License: ${documents.license}` : 'No License selected'}</p>
+                        <div className="grid grid-cols-2 gap-2 mb-4">
+                            {skillsList.map(skill => (
+                                <label key={skill} className="flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.skills.includes(skill)}
+                                        onChange={() => handleSkillChange(skill)}
+                                        className="mr-2"
+                                    />
+                                    {skill}
+                                </label>
+                            ))}
+                        </div>
+                        <button onClick={handleSubmit} className="form-button">
+                            {language === 'en' ? 'Submit Registration' : 'पंजीकरण सबमिट करें'}
+                        </button>
                     </div>
-                    <button className="bg-blue-500 text-white p-2 rounded">
-                        {language === 'en' ? 'View Bookings' : 'बुकिंग्स देखें'}
-                    </button>
                 </div>
             );
         }
 
         // Admin Panel
         function AdminPanel({ language }) {
+            const [providers, setProviders] = useState(getProviders());
+
+            const handleApproval = (phone, status) => {
+                updateProviderStatus(phone, status);
+                setProviders(getProviders());
+                alert(language === 'en' 
+                    ? `Provider ${status === 'approved' ? 'approved' : 'rejected'}!` 
+                    : `प्रदाता ${status === 'approved' ? 'स्वीकृत' : 'अस्वीकृत'}!`);
+            };
+
             return (
                 <div>
                     <h2 className="text-2xl font-bold mb-4">
                         {language === 'en' ? 'Admin Panel' : 'प्रशासन पैनल'}
                     </h2>
-                    <div className="bg-white p-4 rounded-lg shadow mb-4">
+                    <div className="bg-white p-6 rounded-xl shadow-lg mb-4">
                         <h3 className="text-lg font-semibold mb-2">
                             {language === 'en' ? 'Manage Providers' : 'प्रदाताओं को प्रबंधित करें'}
                         </h3>
-                        <button className="bg-green-500 text-white p-2 rounded mr-2">
-                            {language === 'en' ? 'Approve Providers' : 'प्रदाताओं को स्वीकृत करें'}
-                        </button>
-                        <button className="bg-red-500 text-white p-2 rounded">
-                            {language === 'en' ? 'Reject Providers' : 'प्रदाताओं को अस्वीकार करें'}
-                        </button>
-                    </div>
-                    <div className="bg-white p-4 rounded-lg shadow mb-4">
-                        <h3 className="text-lg font-semibold mb-2">
-                            {language === 'en' ? 'Monitor Transactions' : 'लेनदेन की निगरानी करें'}
-                        </h3>
-                        <p>{language === 'en' ? 'View transaction logs' : 'लेनदेन लॉग देखें'}</p>
-                    </div>
-                    <div className="bg-white p-4 rounded-lg shadow">
-                        <h3 className="text-lg font-semibold mb-2">
-                            {language === 'en' ? 'Broadcast Notifications' : 'प्रसारण सूचनाएँ'}
-                        </h3>
-                        <textarea
-                            placeholder={language === 'en' ? 'Enter notification message...' : 'सूचना संदेश दर्ज करें...'}
-                            className="w-full p-2 border rounded mb-2"
-                        />
-                        <button className="bg-blue-500 text-white p-2 rounded">
-                            {language === 'en' ? 'Send Notification' : 'सूचना भेजें'}
-                        </button>
+                        {providers.length === 0 ? (
+                            <p>{language === 'en' ? 'No providers registered.' : 'कोई प्रदाता पंजीकृत नहीं।'}</p>
+                        ) : (
+                            providers.map(provider => (
+                                <div key={provider.phone} className="border-b py-2">
+                                    <p><strong>{language === 'en' ? 'Name' : 'नाम'}:</strong> {provider.name}</p>
+                                    <p><strong>{language === 'en' ? 'Phone' : 'फोन'}:</strong> {provider.phone}</p>
+                                    <p><strong>{language === 'en' ? 'Skills' : 'कौशल'}:</strong> {provider.skills.join(', ')}</p>
+                                    <p><strong>{language === 'en' ? 'Status' : 'स्थिति'}:</strong> {provider.status}</p>
+                                    {provider.status === 'pending' && (
+                                        <div className="flex gap-2 mt-2">
+                                            <button
+                                                onClick={() => handleApproval(provider.phone, 'approved')}
+                                                className="bg-green-500 text-white p-2 rounded hover:bg-green-600"
+                                            >
+                                                {language === 'en' ? 'Approve' : 'स्वीकृत करें'}
+                                            </button>
+                                            <button
+                                                onClick={() => handleApproval(provider.phone, 'rejected')}
+                                                className="bg-red-500 text-white p-2 rounded hover:bg-red-600"
+                                            >
+                                                {language === 'en' ? 'Reject' : 'अस्वीकार करें'}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))
+                        )}
                     </div>
                 </div>
             );
@@ -271,6 +392,43 @@
             return (
                 <div className="chatbot">
                     <p>{language === 'en' ? 'Chat with us!' : 'हमसे चैट करें!'}</p>
+                </div>
+            );
+        }
+
+        // Footer Component
+        function Footer({ language }) {
+            return (
+                <div className="footer">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <h3 className="text-lg font-semibold mb-2">
+                                {language === 'en' ? 'About Rural Connect' : 'रूरल कनेक्ट के बारे में'}
+                            </h3>
+                            <p>
+                                {language === 'en' 
+                                    ? 'Connecting rural communities with trusted service providers for home, farm, and emergency needs.' 
+                                    : 'ग्रामीण समुदायों को घर, खेत और आपातकालीन जरूरतों के लिए विश्वसनीय सेवा प्रदाताओं से जोड़ना।'}
+                            </p>
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-semibold mb-2">
+                                {language === 'en' ? 'Contact Us' : 'संपर्क करें'}
+                            </h3>
+                            <p>Email: support@ruralconnect.in</p>
+                            <p>Phone: +91 9876543210</p>
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-semibold mb-2">
+                                {language === 'en' ? 'Links' : 'लिंक'}
+                            </h3>
+                            <p><a href="#" className="hover:underline">Privacy Policy</a></p>
+                            <p><a href="#" className="hover:underline">Terms of Service</a></p>
+                        </div>
+                    </div>
+                    <p className="text-center mt-4">
+                        &copy; 2025 Rural Connect. {language === 'en' ? 'All rights reserved.' : 'सभी अधिकार सुरक्षित।'}
+                    </p>
                 </div>
             );
         }
