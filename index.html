@@ -12,12 +12,14 @@
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
         body { font-family: 'Arial', sans-serif; }
-        .category-container { @apply bg-gray-100 p-4 rounded-lg shadow-md; }
+        .header { @apply sticky top-0 bg-white shadow-md z-10 p-4 flex justify-between items-center; }
+        .category-container { @apply bg-gray-100 p-4 rounded-lg shadow-md mb-4; }
         .service-card { @apply bg-white p-3 m-2 rounded-lg shadow hover:shadow-lg transition; }
         .banner { @apply bg-gradient-to-r from-blue-500 to-green-500 text-white p-4 rounded-lg mb-4; }
-        .language-toggle { @apply fixed top-4 right-4 bg-gray-800 text-white px-3 py-1 rounded; }
+        .language-toggle { @apply bg-gray-800 text-white px-3 py-1 rounded; }
         .chatbot { @apply fixed bottom-4 right-4 bg-blue-500 text-white p-4 rounded-full shadow-lg; }
         .error-message { @apply text-red-500 p-4 text-center; }
+        .main-content { @apply p-4; }
     </style>
 </head>
 <body>
@@ -25,7 +27,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // Mock User Data (Simulating Firebase Authentication and Database)
+        // Mock User Data
         const mockUsers = {
             'mock-customer': { uid: 'mock-customer', phoneNumber: '+919876543210', role: 'customer' },
             'mock-provider': { uid: 'mock-provider', phoneNumber: '+919876543211', role: 'provider' },
@@ -41,7 +43,6 @@
             const [error, setError] = useState('');
 
             useEffect(() => {
-                // Simulate user login (default to customer for initial load)
                 if (!user) {
                     setUser(mockUsers['mock-customer']);
                     setRole('customer');
@@ -69,37 +70,39 @@
 
             return (
                 <div className="min-h-screen bg-gray-50">
-                    <button onClick={toggleLanguage} className="language-toggle">
-                        {language === 'en' ? 'हिन्दी' : 'English'}
-                    </button>
-                    <div className="p-4">
+                    <div className="header">
                         <select
                             value={role}
                             onChange={(e) => handleRoleChange(e.target.value)}
-                            className="p-2 border rounded mb-4"
+                            className="p-2 border rounded"
                         >
                             <option value="customer">{language === 'en' ? 'Customer' : 'ग्राहक'}</option>
                             <option value="provider">{language === 'en' ? 'Service Provider' : 'सेवा प्रदाता'}</option>
                             <option value="admin">{language === 'en' ? 'Admin' : 'प्रशासक'}</option>
                         </select>
+                        <button onClick={toggleLanguage} className="language-toggle">
+                            {language === 'en' ? 'हिन्दी' : 'English'}
+                        </button>
                     </div>
-                    {user ? (
-                        role === 'provider' ? (
-                            <ProviderDashboard language={language} />
-                        ) : role === 'admin' ? (
-                            <AdminPanel language={language} />
+                    <div className="main-content">
+                        {user ? (
+                            role === 'provider' ? (
+                                <ProviderDashboard language={language} />
+                            ) : role === 'admin' ? (
+                                <AdminPanel language={language} />
+                            ) : (
+                                <CustomerDashboard 
+                                    language={language} 
+                                    searchQuery={searchQuery} 
+                                    handleSearch={handleSearch} 
+                                />
+                            )
                         ) : (
-                            <CustomerDashboard 
-                                language={language} 
-                                searchQuery={searchQuery} 
-                                handleSearch={handleSearch} 
-                            />
-                        )
-                    ) : (
-                        <div className="error-message">
-                            {language === 'en' ? 'Loading user...' : 'उपयोगकर्ता लोड हो रहा है...'}
-                        </div>
-                    )}
+                            <div className="error-message">
+                                {language === 'en' ? 'Loading user...' : 'उपयोगकर्ता लोड हो रहा है...'}
+                            </div>
+                        )}
+                    </div>
                 </div>
             );
         }
@@ -143,7 +146,7 @@
             ];
 
             return (
-                <div className="p-4">
+                <div>
                     <div className="banner">
                         {language === 'en' ? 'Special Offer: 10% OFF on First Booking!' : 'विशेष ऑफर: पहली बुकिंग पर 10% छूट!'}
                     </div>
@@ -158,9 +161,9 @@
                         {language === 'en' ? 'Voice Search' : 'वॉयस सर्च'}
                     </button>
                     {categories.map((category) => (
-                        <div key={category.name} className="category-container mb-4">
+                        <div key={category.name} className="category-container">
                             <h3 className="text-xl font-bold mb-2">{category.icon} {category.name}</h3>
-                            <div className="flex flex-wrap">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                 {category.services
                                     .filter((service) => service.toLowerCase().includes(searchQuery.toLowerCase()))
                                     .map((service) => (
@@ -195,7 +198,7 @@
             };
 
             return (
-                <div className="p-4">
+                <div>
                     <h2 className="text-2xl font-bold mb-4">
                         {language === 'en' ? 'Provider Dashboard' : 'सेवा प्रदाता डैशबोर्ड'}
                     </h2>
@@ -223,10 +226,10 @@
             );
         }
 
-        // Admin Panel (Placeholder)
+        // Admin Panel
         function AdminPanel({ language }) {
             return (
-                <div className="p-4">
+                <div>
                     <h2 className="text-2xl font-bold mb-4">
                         {language === 'en' ? 'Admin Panel' : 'प्रशासन पैनल'}
                     </h2>
@@ -263,7 +266,7 @@
             );
         }
 
-        // Chatbot Component (Placeholder)
+        // Chatbot Component
         function Chatbot({ language }) {
             return (
                 <div className="chatbot">
@@ -286,11 +289,12 @@
             }
         }
 
-        ReactDOM.render(
+        // Use createRoot for React 18
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(
             <ErrorBoundary>
                 <App />
-            </ErrorBoundary>,
-            document.getElementById('root')
+            </ErrorBoundary>
         );
 
         // PWA Service Worker
