@@ -24,6 +24,10 @@
         .footer { @apply bg-gray-800 text-white p-6 mt-6; }
         .form-input { @apply w-full p-3 mb-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500; }
         .form-button { @apply bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 w-full; }
+        .table-container { @apply bg-white p-6 rounded-xl shadow-lg mb-6; }
+        .status-pending { @apply text-yellow-600; }
+        .status-completed { @apply text-green-600; }
+        .status-dismissed { @apply text-red-600; }
     </style>
 </head>
 <body>
@@ -41,7 +45,7 @@
         // Mock Backend (Local Storage)
         const saveProvider = (provider) => {
             const providers = JSON.parse(localStorage.getItem('providers') || '[]');
-            providers.push({ ...provider, status: 'pending' });
+            providers.push({ ...provider, status: 'pending', availability: 'available' });
             localStorage.setItem('providers', JSON.stringify(providers));
         };
 
@@ -55,6 +59,22 @@
             localStorage.setItem('providers', JSON.stringify(updated));
         };
 
+        const getBookings = () => {
+            return JSON.parse(localStorage.getItem('bookings') || '[]');
+        };
+
+        const updateBookingStatus = (id, status, providerPhone = null, timeEstimate = null) => {
+            const bookings = getBookings();
+            const updated = bookings.map(b => b.id === id ? { ...b, status, providerPhone, timeEstimate } : b);
+            localStorage.setItem('bookings', JSON.stringify(updated));
+        };
+
+        const addRating = (providerPhone, rating) => {
+            const providers = getProviders();
+            const updated = providers.map(p => p.phone === providerPhone ? { ...p, ratings: [...(p.ratings || []), rating] } : p);
+            localStorage.setItem('providers', JSON.stringify(updated));
+        };
+
         // Main App Component
         function App() {
             const [user, setUser] = useState(null);
@@ -62,6 +82,7 @@
             const [language, setLanguage] = useState('en');
             const [searchQuery, setSearchQuery] = useState('');
             const [error, setError] = useState('');
+            const [notifications, setNotifications] = useState([]);
 
             useEffect(() => {
                 if (!user) {
@@ -83,6 +104,11 @@
                 setUser(mockUsers[`mock-${selectedRole}`]);
                 setRole(selectedRole);
                 console.log(`Switched to mock user: ${selectedRole}`);
+            };
+
+            const addNotification = (message) => {
+                setNotifications([...notifications, message]);
+                setTimeout(() => setNotifications(n => n.slice(1)), 5000);
             };
 
             if (error) {
@@ -107,16 +133,22 @@
                     </div>
                     <div className="main-content">
                         <ServicesOverview language={language} />
+                        {notifications.map((n, i) => (
+                            <div key={i} className="bg-blue-100 text-blue-800 p-2 mb-2 rounded">
+                                {n}
+                            </div>
+                        ))}
                         {user ? (
                             role === 'provider' ? (
-                                <ProviderDashboard language={language} />
+                                <ProviderDashboard language={language} addNotification={addNotification} />
                             ) : role === 'admin' ? (
-                                <AdminPanel language={language} />
+                                <AdminPanel language={language} addNotification={addNotification} />
                             ) : (
                                 <CustomerDashboard 
                                     language={language} 
                                     searchQuery={searchQuery} 
                                     handleSearch={handleSearch} 
+                                    addNotification={addNotification}
                                 />
                             )
                         ) : (
@@ -147,7 +179,7 @@
         }
 
         // Customer Dashboard
-        function CustomerDashboard({ language, searchQuery, handleSearch }) {
+        function CustomerDashboard({ language, searchQuery, handleSearch, addNotification }) {
             const categories = [
                 {
                     name: language === 'en' ? 'Home Appliance Repair' : 'घरेलू उपकरण मरम्मत',
@@ -185,9 +217,11 @@
             ];
 
             const handleBookNow = (service) => {
-                // Redirect to booking form
                 window.location.href = `booking-form.html?service=${encodeURIComponent(service)}`;
             };
+
+            const bookings = getBookings().filter(b => b.phone === mockUsers['mock-customer'].phoneNumber);
+            const providers = getProviders();
 
             return (
                 <div>
@@ -224,13 +258,62 @@
                             </div>
                         </div>
                     ))}
+                    <div className="table-container">
+                        <h3 className="text-xl font-bold mb-4">
+                            {language === 'en' ? 'Your Bookings' : 'आपकी बुकिंग्स'}
+                        </h3>
+                        {bookings.length === 0 ? (
+                            <p>{language === 'en' ? 'No bookings yet.' : 'अभी तक कोई बुकिंग नहीं।'}</p>
+                        ) : (
+                            <table className="w-full border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-200">
+                                        <th className="p-2">{language === 'en' ? 'Service' : 'सेवा'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Status' : 'स्थिति'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Provider' : 'प्रदाता'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Time Estimate' : 'समय अनुमान'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Rating' : 'रेटिंग'}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {bookings.map(booking => {
+                                        const provider = providers.find(p => p.phone === booking.providerPhone);
+                                        return (
+                                            <tr key={booking.id} className="border-b">
+                                                <td className="p-2">{booking.service}</td>
+                                                <td className={`p-2 status-${booking.status}`}>{booking.status}</td>
+                                                <td className="p-2">{provider ? provider.name : 'Not Assigned'}</td>
+                                                <td className="p-2">{booking.timeEstimate || 'N/A'}</td>
+                                                <td className="p-2">
+                                                    {booking.status === 'completed' && (
+                                                        <select
+                                                            onChange={(e) => {
+                                                                addRating(booking.providerPhone, parseInt(e.target.value));
+                                                                addNotification(language === 'en' ? 'Rating submitted!' : 'रेटिंग सबमिट की गई!');
+                                                            }}
+                                                            className="p-1 border rounded"
+                                                        >
+                                                            <option value="">{language === 'en' ? 'Rate' : 'रेट करें'}</option>
+                                                            {[1, 2, 3, 4, 5].map(n => (
+                                                                <option key={n} value={n}>{n} ★</option>
+                                                            ))}
+                                                        </select>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                     <Chatbot language={language} />
                 </div>
             );
         }
 
         // Provider Dashboard
-        function ProviderDashboard({ language }) {
+        function ProviderDashboard({ language, addNotification }) {
             const [formData, setFormData] = useState({
                 name: '',
                 phone: '',
@@ -238,6 +321,7 @@
                 skills: []
             });
             const [submitted, setSubmitted] = useState(false);
+            const [availability, setAvailability] = useState('available');
 
             const skillsList = [
                 'Fridge Repair', 'AC Repair', 'Plumber', 'Electrician', 'Mason',
@@ -261,10 +345,12 @@
                     alert(language === 'en' ? 'Please fill all fields and select at least one skill.' : 'कृपया सभी क्षेत्र भरें और कम से कम एक कौशल चुनें।');
                     return;
                 }
-                saveProvider(formData);
+                saveProvider({ ...formData, phone: formData.phone });
                 setSubmitted(true);
-                alert(language === 'en' ? 'Registration submitted! Awaiting admin approval.' : 'पंजीकरण सबमिट किया गया! व्यवस्थापक अनुमोदन की प्रतीक्षा है।');
+                addNotification(language === 'en' ? 'Registration submitted! Awaiting admin approval.' : 'पंजीकरण सबमिट किया गया! व्यवस्थापक अनुमोदन की प्रतीक्षा है।');
             };
+
+            const bookings = getBookings().filter(b => b.providerPhone === mockUsers['mock-provider'].phoneNumber);
 
             if (submitted) {
                 return (
@@ -272,9 +358,75 @@
                         <h2 className="text-2xl font-bold mb-4">
                             {language === 'en' ? 'Provider Dashboard' : 'सेवा प्रदाता डैशबोर्ड'}
                         </h2>
-                        <p className="text-green-600">
+                        <p className="text-green-600 mb-4">
                             {language === 'en' ? 'Your registration is pending approval.' : 'आपका पंजीकरण अनुमोदन के लिए लंबित है।'}
                         </p>
+                        <div className="table-container">
+                            <h3 className="text-xl font-bold mb-4">
+                                {language === 'en' ? 'Assigned Bookings' : 'आवंटित बुकिंग्स'}
+                            </h3>
+                            {bookings.length === 0 ? (
+                                <p>{language === 'en' ? 'No bookings assigned.' : 'कोई बुकिंग आवंटित नहीं।'}</p>
+                            ) : (
+                                <table className="w-full border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-200">
+                                            <th className="p-2">{language === 'en' ? 'Service' : 'सेवा'}</th>
+                                            <th className="p-2">{language === 'en' ? 'Customer' : 'ग्राहक'}</th>
+                                            <th className="p-2">{language === 'en' ? 'Status' : 'स्थिति'}</th>
+                                            <th className="p-2">{language === 'en' ? 'Actions' : 'कार्रवाइयाँ'}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {bookings.map(booking => (
+                                            <tr key={booking.id} className="border-b">
+                                                <td className="p-2">{booking.service}</td>
+                                                <td className="p-2">{booking.name}</td>
+                                                <td className={`p-2 status-${booking.status}`}>{booking.status}</td>
+                                                <td className="p-2">
+                                                    {booking.status === 'pending' && (
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => {
+                                                                    const timeEstimate = prompt(language === 'en' ? 'Enter time estimate (e.g., 2 hours)' : 'समय अनुमान दर्ज करें (उदाहरण: 2 घंटे)');
+                                                                    if (timeEstimate) {
+                                                                        updateBookingStatus(booking.id, 'accepted', mockUsers['mock-provider'].phoneNumber, timeEstimate);
+                                                                        addNotification(language === 'en' ? `Accepted ${booking.service} with estimate: ${timeEstimate}` : `${booking.service} स्वीकार किया गया, अनुमान: ${timeEstimate}`);
+                                                                    }
+                                                                }}
+                                                                className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
+                                                            >
+                                                                {language === 'en' ? 'Accept' : 'स्वीकार करें'}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    updateBookingStatus(booking.id, 'dismissed');
+                                                                    addNotification(language === 'en' ? `Dismissed ${booking.service}` : `${booking.service} खारिज किया गया`);
+                                                                }}
+                                                                className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
+                                                            >
+                                                                {language === 'en' ? 'Dismiss' : 'खारिज करें'}
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    {booking.status === 'accepted' && (
+                                                        <button
+                                                            onClick={() => {
+                                                                updateBookingStatus(booking.id, 'completed');
+                                                                addNotification(language === 'en' ? `Completed ${booking.service}` : `${booking.service} पूरा हुआ`);
+                                                            }}
+                                                            className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
+                                                        >
+                                                            {language === 'en' ? 'Mark Completed' : 'पूरा हुआ चिह्नित करें'}
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
                     </div>
                 );
             }
@@ -326,23 +478,55 @@
                             ))}
                         </div>
                         <button onClick={handleSubmit} className="form-button">
-                            {language === 'en' ? 'Submit Registration' : 'पंजीकरण सबमिट करें'}
+                            {language === 'en' ? 'Register Now' : 'अभी पंजीकरण करें'}
                         </button>
+                    </div>
+                    <div className="mt-4">
+                        <label className="flex items-center">
+                            <span className="mr-2">{language === 'en' ? 'Availability' : 'उपलब्धता'}</span>
+                            <select
+                                value={availability}
+                                onChange={(e) => setAvailability(e.target.value)}
+                                className="p-2 border rounded"
+                            >
+                                <option value="available">{language === 'en' ? 'Available' : 'उपलब्ध'}</option>
+                                <option value="busy">{language === 'en' ? 'Busy' : 'व्यस्त'}</option>
+                            </select>
+                        </label>
                     </div>
                 </div>
             );
         }
 
         // Admin Panel
-        function AdminPanel({ language }) {
+        function AdminPanel({ language, addNotification }) {
             const [providers, setProviders] = useState(getProviders());
+            const bookings = getBookings();
 
             const handleApproval = (phone, status) => {
                 updateProviderStatus(phone, status);
                 setProviders(getProviders());
-                alert(language === 'en' 
+                addNotification(language === 'en' 
                     ? `Provider ${status === 'approved' ? 'approved' : 'rejected'}!` 
                     : `प्रदाता ${status === 'approved' ? 'स्वीकृत' : 'अस्वीकृत'}!`);
+            };
+
+            const handleComplaint = (bookingId, action) => {
+                const booking = bookings.find(b => b.id === bookingId);
+                if (action === 'accept') {
+                    const timeEstimate = prompt(language === 'en' ? 'Enter time estimate for resolution (e.g., 2 hours)' : 'समाधान के लिए समय अनुमान दर्ज करें (उदाहरण: 2 घंटे)');
+                    if (timeEstimate) {
+                        updateBookingStatus(bookingId, 'accepted', booking.providerPhone, timeEstimate);
+                        addNotification(language === 'en' 
+                            ? `Complaint for ${booking.service} accepted with estimate: ${timeEstimate}` 
+                            : `${booking.service} की शिकायत स्वीकार की गई, अनुमान: ${timeEstimate}`);
+                    }
+                } else {
+                    updateBookingStatus(bookingId, 'dismissed');
+                    addNotification(language === 'en' 
+                        ? `Complaint for ${booking.service} dismissed` 
+                        : `${booking.service} की शिकायत खारिज की गई`);
+                }
             };
 
             return (
@@ -350,37 +534,103 @@
                     <h2 className="text-2xl font-bold mb-4">
                         {language === 'en' ? 'Admin Panel' : 'प्रशासन पैनल'}
                     </h2>
-                    <div className="bg-white p-6 rounded-xl shadow-lg mb-4">
+                    <div className="table-container">
                         <h3 className="text-lg font-semibold mb-2">
                             {language === 'en' ? 'Manage Providers' : 'प्रदाताओं को प्रबंधित करें'}
                         </h3>
                         {providers.length === 0 ? (
                             <p>{language === 'en' ? 'No providers registered.' : 'कोई प्रदाता पंजीकृत नहीं।'}</p>
                         ) : (
-                            providers.map(provider => (
-                                <div key={provider.phone} className="border-b py-2">
-                                    <p><strong>{language === 'en' ? 'Name' : 'नाम'}:</strong> {provider.name}</p>
-                                    <p><strong>{language === 'en' ? 'Phone' : 'फोन'}:</strong> {provider.phone}</p>
-                                    <p><strong>{language === 'en' ? 'Skills' : 'कौशल'}:</strong> {provider.skills.join(', ')}</p>
-                                    <p><strong>{language === 'en' ? 'Status' : 'स्थिति'}:</strong> {provider.status}</p>
-                                    {provider.status === 'pending' && (
-                                        <div className="flex gap-2 mt-2">
-                                            <button
-                                                onClick={() => handleApproval(provider.phone, 'approved')}
-                                                className="bg-green-500 text-white p-2 rounded hover:bg-green-600"
-                                            >
-                                                {language === 'en' ? 'Approve' : 'स्वीकृत करें'}
-                                            </button>
-                                            <button
-                                                onClick={() => handleApproval(provider.phone, 'rejected')}
-                                                className="bg-red-500 text-white p-2 rounded hover:bg-red-600"
-                                            >
-                                                {language === 'en' ? 'Reject' : 'अस्वीकार करें'}
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            ))
+                            <table className="w-full border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-200">
+                                        <th className="p-2">{language === 'en' ? 'Name' : 'नाम'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Phone' : 'फोन'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Skills' : 'कौशल'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Status' : 'स्थिति'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Actions' : 'कार्रवाइयाँ'}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {providers.map(provider => (
+                                        <tr key={provider.phone} className="border-b">
+                                            <td className="p-2">{provider.name}</td>
+                                            <td className="p-2">{provider.phone}</td>
+                                            <td className="p-2">{provider.skills.join(', ')}</td>
+                                            <td className={`p-2 status-${provider.status}`}>{provider.status}</td>
+                                            <td className="p-2">
+                                                {provider.status === 'pending' && (
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => handleApproval(provider.phone, 'approved')}
+                                                            className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
+                                                        >
+                                                            {language === 'en' ? 'Approve' : 'स्वीकृत करें'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleApproval(provider.phone, 'rejected')}
+                                                            className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
+                                                        >
+                                                            {language === 'en' ? 'Reject' : 'अस्वीकार करें'}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                    <div className="table-container">
+                        <h3 className="text-lg font-semibold mb-2">
+                            {language === 'en' ? 'Manage Bookings' : 'बुकिंग्स प्रबंधित करें'}
+                        </h3>
+                        {bookings.length === 0 ? (
+                            <p>{language === 'en' ? 'No bookings recorded.' : 'कोई बुकिंग दर्ज नहीं।'}</p>
+                        ) : (
+                            <table className="w-full border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-200">
+                                        <th className="p-2">{language === 'en' ? 'Service' : 'सेवा'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Customer' : 'ग्राहक'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Provider' : 'प्रदाता'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Status' : 'स्थिति'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Time Estimate' : 'समय अनुमान'}</th>
+                                        <th className="p-2">{language === 'en' ? 'Complaint' : 'शिकायत'}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {bookings.map(booking => {
+                                        const provider = providers.find(p => p.phone === booking.providerPhone);
+                                        return (
+                                            <tr key={booking.id} className="border-b">
+                                                <td className="p-2">{booking.service}</td>
+                                                <td className="p-2">{booking.name}</td>
+                                                <td className="p-2">{provider ? provider.name : 'Not Assigned'}</td>
+                                                <td className={`p-2 status-${booking.status}`}>{booking.status}</td>
+                                                <td className="p-2">{booking.timeEstimate || 'N/A'}</td>
+                                                <td className="p-2">
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => handleComplaint(booking.id, 'accept')}
+                                                            className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
+                                                        >
+                                                            {language === 'en' ? 'Accept' : 'स्वीकार करें'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleComplaint(booking.id, 'dismiss')}
+                                                            className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
+                                                        >
+                                                            {language === 'en' ? 'Dismiss' : 'खारिज करें'}
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         )}
                     </div>
                 </div>
@@ -427,7 +677,7 @@
                         </div>
                     </div>
                     <p className="text-center mt-4">
-                        &copy; 2025 Rural Connect. {language === 'en' ? 'All rights reserved.' : 'सभी अधिकार सुरक्षित।'}
+                        © 2025 Rural Connect. {language === 'en' ? 'All rights reserved.' : 'सभी अधिकार सुरक्षित।'}
                     </p>
                 </div>
             );
